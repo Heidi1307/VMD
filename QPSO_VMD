@@ -1,0 +1,88 @@
+伪代码：
+
+1. 初始化QPSO粒子群，粒子位置代表VMD的α和K参数
+2. 定义适应度函数，根据VMD分解质量进行评价
+3. 重复执行以下步骤直到满足终止条件：
+   a. 对每个粒子：
+      - 使用粒子的α和K参数运行VMD分解
+      - 计算适应度值（如重构误差）
+   b. 更新粒子的位置和速度
+   c. 根据适应度值更新全局最优和个体最优解
+4. 输出最优的α和K参数
+
+import numpy as np
+from vmdpy import VMD  # 假设使用vmdpy库
+
+# 定义适应度函数，使用VMD分解信号并计算误差
+def fitness_function(signal, alpha, K, tau=0, DC=0, init=1, tol=1e-7):
+    # 使用VMD分解信号，加入必要的参数
+    u, u_hat, omega = VMD(signal, alpha=alpha, tau=tau, K=K, DC=DC, init=init, tol=tol)
+    
+    # 重构信号（或者根据实际需求调整适应度计算方式）
+    reconstructed_signal = np.sum(u, axis=0)
+    
+    # 计算误差，适应度值（可以根据实际情况定义）
+    error = np.linalg.norm(signal - reconstructed_signal)
+    return error
+
+# QPSO参数
+class QPSO:
+    def __init__(self, population_size, dim, max_iter, signal, alpha_bounds, K_bounds, tau=0, DC=0, init=1, tol=1e-7):
+        self.population_size = population_size
+        self.dim = dim  # 维度，代表两个优化参数alpha和K
+        self.max_iter = max_iter
+        self.signal = signal
+        self.alpha_bounds = alpha_bounds
+        self.K_bounds = K_bounds
+        self.tau = tau
+        self.DC = DC
+        self.init = init
+        self.tol = tol
+        self.population = np.random.rand(self.population_size, self.dim)  # 初始化粒子
+        self.pbest = self.population.copy()  # 个体最优
+        self.gbest = None  # 全局最优
+        self.fitness = np.inf * np.ones(self.population_size)  # 适应度
+    
+    def optimize(self):
+        for iter_num in range(self.max_iter):
+            # 更新粒子状态
+            for i in range(self.population_size):
+                alpha = self.population[i, 0] * (self.alpha_bounds[1] - self.alpha_bounds[0]) + self.alpha_bounds[0]
+                K = int(self.population[i, 1] * (self.K_bounds[1] - self.K_bounds[0]) + self.K_bounds[0])
+                
+                # 计算适应度值
+                current_fitness = fitness_function(self.signal, alpha, K, tau=self.tau, DC=self.DC, init=self.init, tol=self.tol)
+                if current_fitness < self.fitness[i]:
+                    self.fitness[i] = current_fitness
+                    self.pbest[i] = self.population[i]
+                
+                # 更新全局最优
+                if self.gbest is None or current_fitness < np.min(self.fitness):
+                    self.gbest = self.population[i]
+                    
+            # QPSO更新
+            self.update_particles()
+        
+        alpha_opt = self.gbest[0] * (self.alpha_bounds[1] - self.alpha_bounds[0]) + self.alpha_bounds[0]
+        K_opt = int(self.gbest[1] * (self.K_bounds[1] - self.K_bounds[0]) + self.K_bounds[0])
+        return alpha_opt, K_opt
+    
+    def update_particles(self):
+        # 量子行为更新策略
+        for i in range(self.population_size):
+            # 可以根据量子行为模型更新粒子
+            pass  # 具体更新策略的实现
+
+# 使用QPSO优化VMD参数
+def optimize_vmd(signal, alpha_bounds, K_bounds, population_size=30, max_iter=100, tau=0, DC=0, init=1, tol=1e-7):
+    qpso = QPSO(population_size, dim=2, max_iter=max_iter, signal=signal, alpha_bounds=alpha_bounds, K_bounds=K_bounds, tau=tau, DC=DC, init=init, tol=tol)
+    alpha_opt, K_opt = qpso.optimize()
+    return alpha_opt, K_opt
+
+# 示例：运行QPSO优化VMD
+signal = np.random.randn(1000)  # 模拟信号
+alpha_bounds = [1000, 2000]  # 惩罚因子的范围
+K_bounds = [3, 10]  # 分解层数的范围
+
+alpha_opt, K_opt = optimize_vmd(signal, alpha_bounds, K_bounds)
+print(f"最优的alpha: {alpha_opt}, 最优的K: {K_opt}")
